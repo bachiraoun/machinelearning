@@ -1,5 +1,5 @@
 # machinelearning
-This is a collection machine learning python modules.
+This is a collection of machine learning python modules.
 
 polynomial_regression
 ---------------------
