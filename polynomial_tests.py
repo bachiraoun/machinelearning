@@ -101,16 +101,6 @@ def train_poly5(X,Y, nepocs = 200, weights=None, minLearningSpeed= 1e-5, learnin
     weights  = PR.get_fitted_weights_values()
     return PR, weights, guessedY
 
-def train_poly6(X,Y, nepocs = 200, weights=None, minLearningSpeed= 1e-5, learningRate = [1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9]):
-    PR = PolynomialRegression(X,Y) 
-    PR.set_polynomial(deg=6, weights=weights, learningRate = learningRate)
-    PR.train_model(nepocs, minLearningSpeed=minLearningSpeed)
-    guessedY = PR.guess_values(PR.features)
-    weights  = PR.get_fitted_weights_values()
-    return PR, weights, guessedY
-
-
-
     
 # ###################################################################################### #
 # ############################ CREATE 2nd DEGREE POLYNOMIAL ############################ #
