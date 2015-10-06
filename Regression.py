@@ -279,24 +279,25 @@ class PolynomialRegression(object):
                stops the training if happened.
             #. minLearningSpeed (float): stop learning when learning speed
                defined as diff(lastCost-cost) < minLearningSpeed
+        
+        
         """
-        
-        """When all the training data can't be loaded in memory,
-        an easy solution can be pulling data randomly by chunks from a database.
-        
-        e.g. lets assume training data are stored in a SQL like database of 1e10 entries.
-        
-        # lets pull randomly 5000 data to train at every epoch
-        ids = np.random.randint(low=1, high=1e10, size=5000)
-        ids = str(tuple(ids))
-        # create select query command
-        command  = 'SELECT * FROM TABLENAME WHERE id IN %s'%ids
-        features = databaseCursor.execute(command).fetchall() 
-        # then run the training epochs on those features
-        for _ in xrange(nepoch): 
-            for idx in range(len(features)): 
-                ...
-        """    
+        ## When all the training data can't be loaded in memory,
+        ## an easy solution can be pulling data randomly by chunks from a database.
+        ## 
+        ## e.g. lets assume training data are stored in a SQL like database of 1e10 entries.
+        ## 
+        ## # lets pull randomly 5000 data to train at every epoch
+        ## ids = np.random.randint(low=1, high=1e10, size=5000)
+        ## ids = str(tuple(ids))
+        ## # create select query command
+        ## command  = 'SELECT * FROM TABLENAME WHERE id IN %s'%ids
+        ## features = databaseCursor.execute(command).fetchall() 
+        ## # then run the training epochs on those features
+        ## for _ in xrange(nepoch): 
+        ##     for idx in range(len(features)): 
+        ##         ...
+        ##    
         # initialize variables
         self.costEvolution = []
         self.totalNumberOfEpochs += nepoch
