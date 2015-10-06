@@ -114,10 +114,6 @@ X = 10.*( 1-2*np.random.random((LEN_X, FEATURES)) )
 Y = coeffs[0][0] + sum( [ coeffs[fidx+1][degIdx]*X[:,fidx]**(degIdx+1)
                           for fidx in range(FEATURES)
                           for degIdx in range(degrees) ] )                      
-#Ytest = coeffs[0][0]  + sum( [ coeffs[idx+1][0]*X[:,idx] + 
-#                               coeffs[idx+1][1]*X[:,idx]**2
-#                               for idx in range(FEATURES)] )
-#print Y-Ytest
 
 # add noise to Y
 Y += NOISE*(1-2*np.random.random(Y.shape))
