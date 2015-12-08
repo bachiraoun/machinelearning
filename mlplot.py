@@ -89,6 +89,39 @@ class FeaturesFrame(wx.Frame):
         self.__canvas.draw()
 
 
+def read_and_transform_csv(path):
+    CSV = pd.read_csv(path)
+    # get data 
+    allDataAsNumerical = pd.DataFrame()
+    numericalData      = pd.DataFrame()
+    categoricalData    = pd.DataFrame()
+    for s in CSV:
+        if CSV[s].name == "target":
+            Y = CSV[s]
+        elif CSV[s].name == "id":
+            id = CSV[s]
+        elif CSV[s].dtype != object:
+            numericalData[str(CSV[s].name)] = CSV[s]
+            allDataAsNumerical[str(CSV[s].name)] =np.array(CSV[s]).astype(float)
+        else:
+            categoricalData[str(CSV[s].name)] = CSV[s] 
+    ### ######################################################################### ###
+    ### ########################### CATEGORICAL VALUES ########################## ###
+    CAT_VAL_LUT = {}
+    for name in categoricalData:
+        lut  = {}
+        data = []
+        for v in categoricalData[name]:
+            nval = lut.get(v, len(lut))
+            lut[v] = nval
+            data.append(nval)
+        CAT_VAL_LUT[name] = lut
+        allDataAsNumerical[name] = np.array(data).astype(float)
+    # return data    
+    return pd.DataFrame(allDataAsNumerical), Y
+    
+    
+    
 if __name__ == "__main__":
     # create data
     x    = np.linspace(-10,10,100)
