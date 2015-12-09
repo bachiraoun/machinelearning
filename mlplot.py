@@ -52,27 +52,45 @@ class FeaturesFrame(wx.Frame):
         self.__mainSizer.Add(toolbar, proportion=0, flag=wx.BOTTOM|wx.TOP|wx.EXPAND, border=5)
         # create buttons size
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.__previous = wx.Button(self, wx.ID_ANY, 'Previous')
-        self.__next     = wx.Button(self, wx.ID_ANY, 'Next')
-        sizer.Add(self.__previous, 0, wx.CENTER)
-        sizer.Add(self.__next, 0, wx.CENTER)
+        label = wx.StaticText(self, wx.ID_ANY, label="Index up to %s: "%(self.__features.shape[1]-1) )
+        self.__indexTextCtrl     = wx.TextCtrl(self, wx.ID_ANY, str(self.__index))
+        self.__previousButton    = wx.Button(self, wx.ID_ANY, 'Previous')
+        self.__nextButton        = wx.Button(self, wx.ID_ANY, 'Next')
+        sizer.Add(label, 0, wx.CENTER|wx.EXPAND, border=5)
+        sizer.Add(self.__indexTextCtrl, 1, wx.CENTER|wx.EXPAND, border=5)
+        sizer.Add(self.__previousButton, 0, wx.CENTER, border=5)
+        sizer.Add(self.__nextButton, 0, wx.CENTER, border=5)
         self.__mainSizer.Add(sizer, proportion=0, flag=wx.BOTTOM|wx.TOP|wx.EXPAND, border=5)
         # set and fit sizer
         self.SetSizer(self.__mainSizer)
         self.Fit()
         # bind buttons
-        self.__previous.Bind(wx.EVT_BUTTON, self.on_previous)
-        self.__next.Bind(wx.EVT_BUTTON, self.on_next)
+        self.__indexTextCtrl.Bind(wx.EVT_TEXT, self.on_index_text_control)
+        self.__previousButton.Bind(wx.EVT_BUTTON, self.on_previous_button)
+        self.__nextButton.Bind(wx.EVT_BUTTON, self.on_next_button)
         # hist
         self.__hist = hist
         self.__histBins = histBins
 
-    def on_previous(self, event):
+    def on_previous_button(self, event):
         self.__index = max(0, self.__index-1)
+        self.__indexTextCtrl.ChangeValue( str(self.__index) )
         self.draw(n=self.__index)
     
-    def on_next(self, event):
+    def on_next_button(self, event):
         self.__index = min(self.__index+1, self.__features.shape[1]-1)
+        self.__indexTextCtrl.ChangeValue( str(self.__index) )
+        self.draw(n=self.__index)
+        
+    def on_index_text_control(self, event):
+        try:
+            val = int(self.__indexTextCtrl.GetValue())
+        except:
+            val = self.__index
+        val = max(0, val)
+        val = min(val, self.__features.shape[1]-1)
+        self.__index = val
+        self.__indexTextCtrl.ChangeValue( str(self.__index) )
         self.draw(n=self.__index)
         
     def draw(self, n=0, limMargin=0.05,
@@ -85,8 +103,8 @@ class FeaturesFrame(wx.Frame):
                    ylinewidth=2, ycolor='black'):
         # clear axes
         self.__axes.cla()
-        self.__axes.set_title("%s scatter plot"%self.__features.columns[n])
-        self.__axes.set_xlabel("feature %s (index %i)"%( self.__features.columns[n],n) )
+        self.__axes.set_title("scatter plot of: %s "%self.__features.columns[n])
+        self.__axes.set_xlabel("feature data range")
         self.__axes.set_ylabel("Y")
         # plot feature scatter plot
         feature = self.__features.ix[:,n]
@@ -191,8 +209,6 @@ def drop_stdv_outliers(numericalFeatures, Y, y_nstdv=3, f_nstdv=5, threshold=0.1
                 Y.drop(Y.index[outliers], inplace=True)
     # return 
     return numericalFeatures, Y
-    
-    
     
     
 if __name__ == "__main__":
