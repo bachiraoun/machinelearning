@@ -75,43 +75,53 @@ class FeaturesFrame(wx.Frame):
         self.__index = min(self.__index+1, self.__features.shape[1]-1)
         self.draw(n=self.__index)
         
-    def draw(self, n=0, marginPercent = 0.05,
-                   color='red', markeredgecolor='black',
-                   markersize=5, markeredgewidth=1,
-                   histColor='blue', histalpha=0.5):
+    def draw(self, n=0, limMargin=0.05,
+                   # feature scatter plot
+                   fcolor='red', fmarkeredgecolor='black',
+                   fmarkersize=5, fmarkeredgewidth=1,
+                   # feature hist
+                   histColor='blue', histalpha=0.5, histlinewidth=0, histborderlinewidth=2,
+                   # Y vertical plot
+                   ylinewidth=2, ycolor='black'):
         # clear axes
         self.__axes.cla()
-        #while self.__axes.lines:
-        #    self.__axes.lines.pop(0)
+        self.__axes.set_title("%s scatter plot"%self.__features.columns[n])
+        self.__axes.set_xlabel("feature %s (index %i)"%( self.__features.columns[n],n) )
+        self.__axes.set_ylabel("Y")
+        # plot feature scatter plot
         feature = self.__features.ix[:,n]
         fmin, fmax = float(np.min(feature)), float(np.max(feature))
         self.__axes.plot(feature, self.__Y, 'o', 
-                         color=color, markeredgecolor=markeredgecolor,
-                         markersize=markersize, markeredgewidth=markeredgewidth, zorder=1)
-        self.__axes.set_title(self.__features.columns[n])
+                         color=fcolor, markeredgecolor=fmarkeredgecolor,
+                         markersize=fmarkersize, markeredgewidth=fmarkeredgewidth, zorder=1)
         # add histogram
         if self.__hist:
             hist , edges = np.histogram(feature, bins=self.__histBins)
-            hist *= np.max(self.__Y)/np.max(hist)
-            self.__axes.bar(edges[:-1], hist, width=(edges[1]-edges[0]),alpha=histalpha,
-                            color=histColor, linewidth=0, zorder=10)                   
-            
+            edges = edges.astype(float)
+            edges = (edges[:-1]+edges[1:])/2.
+            hist  = hist.astype(float)* float(np.max(self.__Y))/float(np.max(hist))
+            self.__axes.bar(left=edges, height=hist, width=edges[1]-edges[0],
+                            align='center',alpha=histalpha,
+                            color=histColor, linewidth=histlinewidth, zorder=10)   
+            # plot hist border line
+            if histborderlinewidth:
+                self.__axes.plot(edges,hist, color=histColor,
+                                 linewidth=histborderlinewidth, zorder=10)                               
         # plot y histogram
-        hist , edges = np.histogram(self.__Y, bins=self.__histBins)
-        hist = hist.astype(float)
-        edges = edges.astype(float)
-        edges = (edges[:-1]+edges[1:])/2.
-        hist *= 0.75*(fmax-fmin)/np.max(hist)
-        self.__axes.plot(fmin+hist, edges, color='black', linewidth=2, zorder=20)     
-        
-        
+        if ylinewidth:
+            hist , edges = np.histogram(self.__Y, bins=self.__histBins)
+            hist = hist.astype(float)
+            edges = edges.astype(float)
+            edges = (edges[:-1]+edges[1:])/2.
+            hist *= 0.4*(fmax-fmin)/np.max(hist)
+            self.__axes.plot(fmin+hist, edges, color=ycolor, linewidth=ylinewidth, zorder=20)     
         # set x limits
         min, max = np.min(feature), np.max(feature)
-        margin   = marginPercent*(max-min)
+        margin   = limMargin*(max-min)
         self.__axes.set_xlim([min-margin, max+margin])
         # set y limits
         min, max = np.min(self.__Y), np.max(self.__Y)
-        margin   = marginPercent*(max-min)
+        margin   = limMargin*(max-min)
         self.__axes.set_ylim([min-margin, max+margin])
         # draw canvas
         self.__canvas.draw()
@@ -162,7 +172,7 @@ def drop_stdv_outliers(numericalFeatures, Y, y_nstdv=3, f_nstdv=5, threshold=0.1
         outliers = list(np.where(Y<min)[0])
         outliers.extend( list(np.where(Y>max)[0]) )
         if len(outliers) > threshold*Y.shape[0]:
-            warnings.warn("y_nstdv %i classifies more than %s of data as outliers. condition dropped"%(y_nstdv,threshold*100.))
+            warnings.warn("y_nstdv %i classifies more than %s %% of data as outliers. condition dropped"%(y_nstdv,threshold*100.))
         else:
             numericalFeatures.drop(numericalFeatures.index[outliers], inplace=True)
             Y.drop(Y.index[outliers], inplace=True)
@@ -175,12 +185,13 @@ def drop_stdv_outliers(numericalFeatures, Y, y_nstdv=3, f_nstdv=5, threshold=0.1
             outliers = list(np.where(f<min)[0])
             outliers.extend( list(np.where(f>max)[0]) )
             if len(outliers) > threshold*Y.shape[0]:
-                warnings.warn("f_nstdv %i for %s classifies more than %s of data as outliers. condition dropped"%(y_nstdv,column, threshold*100.))
+                warnings.warn("f_nstdv %i for %s classifies more than %s %% of data as outliers. condition dropped"%(y_nstdv,column, threshold*100.))
             else:
                 numericalFeatures.drop(numericalFeatures.index[outliers], inplace=True)
                 Y.drop(Y.index[outliers], inplace=True)
     # return 
     return numericalFeatures, Y
+    
     
     
     
