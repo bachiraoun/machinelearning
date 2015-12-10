@@ -33,6 +33,8 @@ class FeaturesFrame(wx.Frame):
         assert isinstance(Y, (pd.DataFrame, pd.Series, np.ndarray))
         assert Y.shape in ((self.__features.shape[0], ), (self.__features.shape[0], 1))
         self.__Y = Y
+        self.__ymin, self.__ymax = np.min(self.__Y), np.max(self.__Y)
+        self.__yrange = self.__ymax-self.__ymin
         # create Frame
         wx.Frame.__init__(self, None, title=title)
         self.SetBackgroundColour([255,255,255])
@@ -43,6 +45,10 @@ class FeaturesFrame(wx.Frame):
         self.__axes = self.__figure.add_subplot(111)
         self.__figure.patch.set_color('white')
         self.__canvas = FigureCanvas(self, -1, self.__figure)
+        self.__canvas.mpl_connect('button_press_event', self.on_mpl_mouse_press)
+        self.__canvas.mpl_connect('button_release_event', self.on_mpl_mouse_release)
+        self.__canvas.mpl_connect('pick_event', self.on_mpl_mouse_pick)
+        self.__canvas.mpl_connect('motion_notify_event', self.on_mpl_mouse_motion)
         # create main vertical sizer
         self.__mainSizer = wx.BoxSizer(wx.VERTICAL)
         self.__mainSizer.Add(self.__canvas, 1, wx.LEFT | wx.TOP | wx.EXPAND)
@@ -71,16 +77,57 @@ class FeaturesFrame(wx.Frame):
         # hist
         self.__hist = hist
         self.__histBins = histBins
+        # horizontal and vertical lines
+        self.__hline1 = self.__hline2 = self.__vline1 = self.__vline2 = None
+        self.__dragged = False 
+        self.__hlinePoints = None
+        self.__vlinePoints = {}
 
+    def on_mpl_mouse_press(self, event):
+        hitlist = self.__axes.hitlist(event)
+        if self.__hline1 in hitlist:
+            self.__dragged = self.__hline1
+        elif self.__hline2 in hitlist:
+            self.__dragged = self.__hline2
+        elif self.__vline1 in hitlist:
+            self.__dragged = self.__vline1            
+        elif self.__vline2 in hitlist:
+            self.__dragged = self.__vline2    
+        else: 
+            self.__dragged = False        
+
+    def on_mpl_mouse_release(self, event):
+        self.__dragged = False
+        
+    def on_mpl_mouse_pick(self, event):
+        pass
+            
+    def on_mpl_mouse_motion(self, event):
+        if self.__dragged:
+            if self.__dragged in [self.__vline1, self.__vline2]:
+                self.__dragged.set_xdata( [event.xdata, event.xdata] )
+                if self.__dragged is self.__vline1:
+                   self.__vlinePoints[self.__index] =[event.xdata, self.__vlinePoints[self.__index][1]]
+                else:
+                   self.__vlinePoints[self.__index] = [self.__vlinePoints[self.__index][0], event.xdata]
+            elif self.__dragged in [self.__hline1, self.__hline2]:
+                self.__dragged.set_ydata( [event.ydata, event.ydata] )
+                if self.__dragged is self.__hline1:
+                   self.__hlinePoints = [event.ydata, self.__hlinePoints[1]]
+                else:
+                   self.__hlinePoints = [self.__hlinePoints[0], event.ydata]
+            # draw canvas
+            self.__canvas.draw()
+            
     def on_previous_button(self, event):
         self.__index = max(0, self.__index-1)
         self.__indexTextCtrl.ChangeValue( str(self.__index) )
-        self.draw(n=self.__index)
+        self.draw()
     
     def on_next_button(self, event):
         self.__index = min(self.__index+1, self.__features.shape[1]-1)
         self.__indexTextCtrl.ChangeValue( str(self.__index) )
-        self.draw(n=self.__index)
+        self.draw()
         
     def on_index_text_control(self, event):
         try:
@@ -91,9 +138,9 @@ class FeaturesFrame(wx.Frame):
         val = min(val, self.__features.shape[1]-1)
         self.__index = val
         self.__indexTextCtrl.ChangeValue( str(self.__index) )
-        self.draw(n=self.__index)
+        self.draw()
         
-    def draw(self, n=0, limMargin=0.05,
+    def draw(self, limMargin=0.05,
                    # feature scatter plot
                    fcolor='red', fmarkeredgecolor='black',
                    fmarkersize=5, fmarkeredgewidth=1,
@@ -103,15 +150,27 @@ class FeaturesFrame(wx.Frame):
                    ylinewidth=2, ycolor='black'):
         # clear axes
         self.__axes.cla()
-        self.__axes.set_title("scatter plot of: %s "%self.__features.columns[n])
+        self.__axes.set_title("scatter plot of: %s "%self.__features.columns[self.__index])
         self.__axes.set_xlabel("feature data range")
         self.__axes.set_ylabel("Y")
         # plot feature scatter plot
-        feature = self.__features.ix[:,n]
+        feature = self.__features.ix[:,self.__index]
         fmin, fmax = float(np.min(feature)), float(np.max(feature))
+        frange     = fmax-fmin
         self.__axes.plot(feature, self.__Y, 'o', 
                          color=fcolor, markeredgecolor=fmarkeredgecolor,
                          markersize=fmarkersize, markeredgewidth=fmarkeredgewidth, zorder=1)
+        # add horizontal and vertical lines
+        x1, x2 = self.__vlinePoints.get(self.__index, [fmin+frange/3., fmax-frange/3.])
+        self.__vlinePoints[self.__index] = [x1,x2]
+        self.__vline1 = self.__axes.axvline(x1,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        self.__vline2 = self.__axes.axvline(x2,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        if self.__hlinePoints is None:
+            self.__hlinePoints = [self.__ymin+self.__yrange/3., self.__ymax-self.__yrange/3.]
+        y1,y2 = self.__hlinePoints
+        self.__hline1 = self.__axes.axhline(y1,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        self.__hline2 = self.__axes.axhline(y2,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        
         # add histogram
         if self.__hist:
             hist , edges = np.histogram(feature, bins=self.__histBins)
@@ -134,13 +193,11 @@ class FeaturesFrame(wx.Frame):
             hist *= 0.4*(fmax-fmin)/np.max(hist)
             self.__axes.plot(fmin+hist, edges, color=ycolor, linewidth=ylinewidth, zorder=20)     
         # set x limits
-        min, max = np.min(feature), np.max(feature)
-        margin   = limMargin*(max-min)
-        self.__axes.set_xlim([min-margin, max+margin])
+        margin   = limMargin*(frange)
+        self.__axes.set_xlim([fmin-margin, fmax+margin])
         # set y limits
-        min, max = np.min(self.__Y), np.max(self.__Y)
-        margin   = limMargin*(max-min)
-        self.__axes.set_ylim([min-margin, max+margin])
+        margin   = limMargin*self.__yrange
+        self.__axes.set_ylim([self.__ymin-margin, self.__ymax+margin])
         # draw canvas
         self.__canvas.draw()
 
@@ -209,6 +266,7 @@ def drop_stdv_outliers(numericalFeatures, Y, y_nstdv=3, f_nstdv=5, threshold=0.1
                 Y.drop(Y.index[outliers], inplace=True)
     # return 
     return numericalFeatures, Y
+    
     
     
 if __name__ == "__main__":
