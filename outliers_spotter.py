@@ -10,6 +10,7 @@ import pandas as pd
 
 # import matplotlib
 import matplotlib
+import matplotlib.pyplot as plt
 matplotlib.use('WXAgg')
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wx import NavigationToolbar2Wx
@@ -40,20 +41,36 @@ class FeaturesFrame(wx.Frame):
         self.SetBackgroundColour([255,255,255])
         # panel
         self.__panel = wx.Panel(self)
-        # create figure
-        self.__figure = Figure()
-        self.__axes = self.__figure.add_subplot(111)
-        self.__figure.patch.set_color('white')
-        self.__canvas = FigureCanvas(self, -1, self.__figure)
-        self.__canvas.mpl_connect('button_press_event', self.on_mpl_mouse_press)
-        self.__canvas.mpl_connect('button_release_event', self.on_mpl_mouse_release)
-        self.__canvas.mpl_connect('pick_event', self.on_mpl_mouse_pick)
-        self.__canvas.mpl_connect('motion_notify_event', self.on_mpl_mouse_motion)
+        # create main figure
+        self.__mainFigure = Figure()
+        self.__mainAxes = self.__mainFigure.add_subplot(111)
+        self.__mainFigure.patch.set_color('white')
+        self.__mainCanvas = FigureCanvas(self, -1, self.__mainFigure)
+        self.__mainCanvas.mpl_connect('button_press_event', self.on_mpl_mouse_press)
+        self.__mainCanvas.mpl_connect('button_release_event', self.on_mpl_mouse_release)
+        self.__mainCanvas.mpl_connect('pick_event', self.on_mpl_mouse_pick)
+        self.__mainCanvas.mpl_connect('motion_notify_event', self.on_mpl_mouse_motion)
+        # create upper figure
+        self.__upperFigure = Figure(figsize=(3,2))
+        self.__upperAxes = self.__upperFigure.add_subplot(111)
+        self.__upperFigure.patch.set_color('white')
+        self.__upperCanvas = FigureCanvas(self, -1, self.__upperFigure)
+        # create lower figure
+        self.__lowerFigure = Figure(figsize=(3,2))
+        self.__lowerAxes = self.__lowerFigure.add_subplot(111)
+        self.__lowerFigure.patch.set_color('white')
+        self.__lowerCanvas = FigureCanvas(self, -1, self.__lowerFigure)
         # create main vertical sizer
         self.__mainSizer = wx.BoxSizer(wx.VERTICAL)
-        self.__mainSizer.Add(self.__canvas, 1, wx.LEFT | wx.TOP | wx.EXPAND)
+        canvasSizer = wx.BoxSizer(wx.HORIZONTAL)
+        minorSizer  = wx.BoxSizer(wx.VERTICAL)
+        canvasSizer.Add(self.__mainCanvas, 1, wx.LEFT | wx.TOP | wx.EXPAND)
+        minorSizer.Add(self.__upperCanvas, 1, wx.LEFT | wx.TOP | wx.EXPAND)
+        minorSizer.Add(self.__lowerCanvas, 1, wx.LEFT | wx.TOP | wx.EXPAND)
+        canvasSizer.Add(minorSizer, 0, wx.LEFT | wx.TOP | wx.EXPAND)
+        self.__mainSizer.Add(canvasSizer, 1, wx.LEFT | wx.TOP | wx.EXPAND)
         # add toolbar
-        toolbar = NavigationToolbar2Wx(self.__canvas)
+        toolbar = NavigationToolbar2Wx(self.__mainCanvas)
         toolbar.Realize()
         self.__mainSizer.Add(toolbar, proportion=0, flag=wx.BOTTOM|wx.TOP|wx.EXPAND, border=5)
         # create buttons size
@@ -81,10 +98,11 @@ class FeaturesFrame(wx.Frame):
         self.__hline1 = self.__hline2 = self.__vline1 = self.__vline2 = None
         self.__dragged = False 
         self.__hlinePoints = None
+        self.__yIndexes = None
         self.__vlinePoints = {}
 
     def on_mpl_mouse_press(self, event):
-        hitlist = self.__axes.hitlist(event)
+        hitlist = self.__mainAxes.hitlist(event)
         if self.__hline1 in hitlist:
             self.__dragged = self.__hline1
         elif self.__hline2 in hitlist:
@@ -117,17 +135,23 @@ class FeaturesFrame(wx.Frame):
                 else:
                    self.__hlinePoints = [self.__hlinePoints[0], event.ydata]
             # draw canvas
-            self.__canvas.draw()
+            self.__mainCanvas.draw()
+            if self.__dragged in [self.__vline1, self.__vline2]:
+                self.lower_draw()
+            elif self.__dragged in [self.__hline1, self.__hline2]:
+                self.__yIndexes = None
+                self.upper_draw()
+                
             
     def on_previous_button(self, event):
         self.__index = max(0, self.__index-1)
         self.__indexTextCtrl.ChangeValue( str(self.__index) )
-        self.draw()
+        self.main_draw()
     
     def on_next_button(self, event):
         self.__index = min(self.__index+1, self.__features.shape[1]-1)
         self.__indexTextCtrl.ChangeValue( str(self.__index) )
-        self.draw()
+        self.main_draw()
         
     def on_index_text_control(self, event):
         try:
@@ -138,38 +162,138 @@ class FeaturesFrame(wx.Frame):
         val = min(val, self.__features.shape[1]-1)
         self.__index = val
         self.__indexTextCtrl.ChangeValue( str(self.__index) )
-        self.draw()
-        
-    def draw(self, limMargin=0.05,
+        self.main_draw()
+    
+    def upper_draw(self, limMargin=0.05,
                    # feature scatter plot
                    fcolor='red', fmarkeredgecolor='black',
                    fmarkersize=5, fmarkeredgewidth=1,
                    # feature hist
-                   histColor='blue', histalpha=0.5, histlinewidth=0, histborderlinewidth=2,
+                   histColor='blue', histalpha=0.5, histlinewidth=0, histborderlinewidth=1.5,
                    # Y vertical plot
-                   ylinewidth=2, ycolor='black'):
+                   ylinewidth=2, ycolor='black',
+                   # horizontal and vertical lines
+                   vhlinewidth=1.5):
         # clear axes
-        self.__axes.cla()
-        self.__axes.set_title("scatter plot of: %s "%self.__features.columns[self.__index])
-        self.__axes.set_xlabel("feature data range")
-        self.__axes.set_ylabel("Y")
+        self.__upperAxes.cla()
+        self.__upperAxes.set_ylabel("Y")
+        if self.__yIndexes is None:
+            min, max = sorted(self.__hlinePoints)
+            self.__yIndexes = np.where((self.__Y>min) & (self.__Y<max))[0]
+        # draw features
+        F, Y = self.__features.ix[self.__yIndexes,self.__index], self.__Y[self.__yIndexes]
+        fmin, fmax = float(np.min(F)), float(np.max(F))
+        ymin, ymax = float(np.min(Y)), float(np.max(Y))
+        frange     = fmax-fmin
+        yrange     = ymax-ymin
+        self.__upperAxes.plot(F, Y , 'o', 
+                              color=fcolor, markeredgecolor=fmarkeredgecolor,
+                              markersize=fmarkersize, markeredgewidth=fmarkeredgewidth, zorder=1)
+        # add histogram
+        if self.__hist:
+            hist , edges = np.histogram(F, bins=self.__histBins)
+            edges = edges.astype(float)
+            edges = (edges[:-1]+edges[1:])/2.
+            hist  = hist.astype(float)* float(ymax)/float(np.max(hist))
+            self.__upperAxes.bar(left=edges, height=hist, width=edges[1]-edges[0],
+                                align='center',alpha=histalpha,
+                                color=histColor, linewidth=histlinewidth, zorder=10)   
+            # plot hist border line
+            if histborderlinewidth:
+                self.__upperAxes.plot(edges,hist, color=histColor,
+                                     linewidth=histborderlinewidth, zorder=10)                                                     
+        # set limits
+        # set x limits
+        margin   = limMargin*(frange)
+        self.__upperAxes.set_xlim([fmin-margin, fmax+margin])
+        # set y limits
+        margin   = limMargin*yrange
+        self.__upperAxes.set_ylim([ymin-margin, ymax+margin])
+        # upper canvas draw
+        self.__upperAxes.xaxis.set_major_locator(plt.MaxNLocator(3))
+        self.__upperCanvas.draw()
+        
+    def lower_draw(self, limMargin=0.05,
+                   # feature scatter plot
+                   fcolor='red', fmarkeredgecolor='black',
+                   fmarkersize=5, fmarkeredgewidth=1,
+                   # feature hist
+                   histColor='blue', histalpha=0.5, histlinewidth=0, histborderlinewidth=1.5,
+                   # Y vertical plot
+                   ylinewidth=2, ycolor='black',
+                   # horizontal and vertical lines
+                   vhlinewidth=1.5):
+        # clear axes
+        self.__lowerAxes.cla()
+        self.__lowerAxes.set_ylabel("Y")
+        # compute indexes
+        feature = self.__features.ix[:,self.__index]
+        min, max = sorted(self.__vlinePoints[self.__index])
+        indexes = np.where((feature>min) & (feature<max))[0]
+        # draw features
+        F, Y = feature[indexes], self.__Y[indexes]
+        fmin, fmax = float(np.min(F)), float(np.max(F))
+        ymin, ymax = float(np.min(Y)), float(np.max(Y))
+        frange     = fmax-fmin
+        yrange     = ymax-ymin
+        self.__lowerAxes.plot( F, Y, 'o', 
+                               color=fcolor, markeredgecolor=fmarkeredgecolor,
+                               markersize=fmarkersize, markeredgewidth=fmarkeredgewidth, zorder=1)
+        # add histogram
+        if self.__hist:
+            hist , edges = np.histogram(F, bins=self.__histBins)
+            edges = edges.astype(float)
+            edges = (edges[:-1]+edges[1:])/2.
+            hist  = hist.astype(float)* float(ymax)/float(np.max(hist))
+            self.__lowerAxes.bar(left=edges, height=hist, width=edges[1]-edges[0],
+                                align='center',alpha=histalpha,
+                                color=histColor, linewidth=histlinewidth, zorder=10)   
+            # plot hist border line
+            if histborderlinewidth:
+                self.__lowerAxes.plot(edges,hist, color=histColor,
+                                     linewidth=histborderlinewidth, zorder=10)                                     
+        # set x limits
+        margin   = limMargin*(frange)
+        self.__lowerAxes.set_xlim([fmin-margin, fmax+margin])
+        # set y limits
+        margin   = limMargin*yrange
+        self.__lowerAxes.set_ylim([ymin-margin, ymax+margin])
+        # upper canvas draw
+        self.__lowerAxes.xaxis.set_major_locator(plt.MaxNLocator(3))
+        self.__lowerCanvas.draw()
+                   
+    def main_draw(self, limMargin=0.05,
+                  # feature scatter plot
+                  fcolor='red', fmarkeredgecolor='black',
+                  fmarkersize=5, fmarkeredgewidth=1,
+                  # feature hist
+                  histColor='blue', histalpha=0.5, histlinewidth=0, histborderlinewidth=1.5,
+                  # Y vertical plot
+                  ylinewidth=2, ycolor='black',
+                  # horizontal and vertical lines
+                  vhlinewidth=1.5):
+        # clear axes
+        self.__mainAxes.cla()
+        self.__mainAxes.set_title("scatter plot of: %s "%self.__features.columns[self.__index])
+        self.__mainAxes.set_xlabel("feature data range")
+        self.__mainAxes.set_ylabel("Y")
         # plot feature scatter plot
         feature = self.__features.ix[:,self.__index]
         fmin, fmax = float(np.min(feature)), float(np.max(feature))
         frange     = fmax-fmin
-        self.__axes.plot(feature, self.__Y, 'o', 
+        self.__mainAxes.plot(feature, self.__Y, 'o', 
                          color=fcolor, markeredgecolor=fmarkeredgecolor,
                          markersize=fmarkersize, markeredgewidth=fmarkeredgewidth, zorder=1)
         # add horizontal and vertical lines
         x1, x2 = self.__vlinePoints.get(self.__index, [fmin+frange/3., fmax-frange/3.])
         self.__vlinePoints[self.__index] = [x1,x2]
-        self.__vline1 = self.__axes.axvline(x1,linewidth=2, linestyle='--',color = 'black', zorder=100)
-        self.__vline2 = self.__axes.axvline(x2,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        self.__vline1 = self.__mainAxes.axvline(x1,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        self.__vline2 = self.__mainAxes.axvline(x2,linewidth=2, linestyle='--',color = 'black', zorder=100)
         if self.__hlinePoints is None:
             self.__hlinePoints = [self.__ymin+self.__yrange/3., self.__ymax-self.__yrange/3.]
         y1,y2 = self.__hlinePoints
-        self.__hline1 = self.__axes.axhline(y1,linewidth=2, linestyle='--',color = 'black', zorder=100)
-        self.__hline2 = self.__axes.axhline(y2,linewidth=2, linestyle='--',color = 'black', zorder=100)
+        self.__hline1 = self.__mainAxes.axhline(y1,linewidth=vhlinewidth, linestyle='--',color = 'black', zorder=100)
+        self.__hline2 = self.__mainAxes.axhline(y2,linewidth=vhlinewidth, linestyle='--',color = 'black', zorder=100)
         
         # add histogram
         if self.__hist:
@@ -177,12 +301,12 @@ class FeaturesFrame(wx.Frame):
             edges = edges.astype(float)
             edges = (edges[:-1]+edges[1:])/2.
             hist  = hist.astype(float)* float(np.max(self.__Y))/float(np.max(hist))
-            self.__axes.bar(left=edges, height=hist, width=edges[1]-edges[0],
+            self.__mainAxes.bar(left=edges, height=hist, width=edges[1]-edges[0],
                             align='center',alpha=histalpha,
                             color=histColor, linewidth=histlinewidth, zorder=10)   
             # plot hist border line
             if histborderlinewidth:
-                self.__axes.plot(edges,hist, color=histColor,
+                self.__mainAxes.plot(edges,hist, color=histColor,
                                  linewidth=histborderlinewidth, zorder=10)                               
         # plot y histogram
         if ylinewidth:
@@ -191,15 +315,19 @@ class FeaturesFrame(wx.Frame):
             edges = edges.astype(float)
             edges = (edges[:-1]+edges[1:])/2.
             hist *= 0.4*(fmax-fmin)/np.max(hist)
-            self.__axes.plot(fmin+hist, edges, color=ycolor, linewidth=ylinewidth, zorder=20)     
+            self.__mainAxes.plot(fmin+hist, edges, color=ycolor, linewidth=ylinewidth, zorder=20)     
         # set x limits
         margin   = limMargin*(frange)
-        self.__axes.set_xlim([fmin-margin, fmax+margin])
+        self.__mainAxes.set_xlim([fmin-margin, fmax+margin])
         # set y limits
         margin   = limMargin*self.__yrange
-        self.__axes.set_ylim([self.__ymin-margin, self.__ymax+margin])
+        self.__mainAxes.set_ylim([self.__ymin-margin, self.__ymax+margin])
         # draw canvas
-        self.__canvas.draw()
+        self.__mainCanvas.draw()
+        # draw upper
+        self.upper_draw()
+        # draw lower
+        self.lower_draw()
 
 def read_and_transform_csv(path):
     CSV = pd.read_csv(path)
