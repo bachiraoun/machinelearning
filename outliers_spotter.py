@@ -1,10 +1,4 @@
-# standard library imports
-import warnings
-formatwarning_orig = warnings.formatwarning
-warnings.formatwarning = lambda message, category, filename, lineno, line=None: \
-formatwarning_orig(message, category, filename, lineno, line='')
 
-# data imports
 import numpy as np
 import pandas as pd
 
@@ -30,7 +24,7 @@ class FeaturesFrame(wx.Frame):
         if isinstance(features, np.ndarray):
             features = dict([(str(i), features[:,i]) for i in range(features.shape[1])])
             features = pd.DataFrame(features)
-        self.__features = features._get_numeric_data()
+        self.__features = features
         # get Y
         assert isinstance(Y, (pd.DataFrame, pd.Series, np.ndarray))
         assert Y.shape in ((self.__features.shape[0], ), (self.__features.shape[0], 1))
@@ -46,7 +40,10 @@ class FeaturesFrame(wx.Frame):
         self.__yrange = self.__ymax-self.__ymin
         # plotted data
         self.__plottedX = None
-        self.__plottedY       = None
+        self.__plottedY = None
+        self.__category    = None
+        self.__categoryIDX = None
+        self.__categoryLUT = None
         # create Frame
         wx.Frame.__init__(self, None, title=title)
         self.SetBackgroundColour([255,255,255])
@@ -109,7 +106,6 @@ class FeaturesFrame(wx.Frame):
         self.__hline1 = self.__hline2 = self.__vline1 = self.__vline2 = None
         self.__dragged = False
         self.__hlinePoints = None
-        self.__yIndexes = None
         self.__vlinePoints = {}
 
     def on_mpl_mouse_press(self, event):
@@ -150,7 +146,6 @@ class FeaturesFrame(wx.Frame):
             if self.__dragged in [self.__vline1, self.__vline2]:
                 self.lower_draw()
             elif self.__dragged in [self.__hline1, self.__hline2]:
-                self.__yIndexes = None
                 self.upper_draw()
 
 
@@ -190,13 +185,11 @@ class FeaturesFrame(wx.Frame):
         # clear axes
         self.__upperAxes.cla()
         self.__upperAxes.set_ylabel("Y")
-        if self.__yIndexes is None:
-            min, max = sorted(self.__hlinePoints)
-            self.__yIndexes = np.where((self.__Y>min) & (self.__Y<max))[0]
+        minHL, maxHL = sorted(self.__hlinePoints)
+        self.__yIndexes = np.where((self.__plottedY>minHL) & (self.__plottedY<maxHL))[0]
         # draw features
-        #F, Y = self.__features.ix[self.__yIndexes,self.__index], self.__Y[self.__yIndexes]
-        F = self.__plottedX
-        Y = self.__plottedY
+        F = self.__plottedX[self.__yIndexes]
+        Y = self.__plottedY[self.__yIndexes]
         fmin, fmax = float(np.min(F)), float(np.max(F))
         ymin, ymax = float(np.min(Y)), float(np.max(Y))
         frange     = fmax-fmin
@@ -245,13 +238,12 @@ class FeaturesFrame(wx.Frame):
         self.__lowerAxes.cla()
         self.__lowerAxes.set_ylabel("Y")
         # compute indexes
-        feature = self.__features.ix[:,self.__index]
-        min, max = sorted(self.__vlinePoints[self.__index])
-        indexes = np.where((feature>min) & (feature<max))[0]
+        minVL , maxVL = sorted(self.__vlinePoints[self.__index])
+        indexes = np.where((self.__plottedX>minVL) & (self.__plottedX<maxVL))[0]
         # draw features
         #F, Y = feature[indexes], self.__Y[indexes]
-        F = self.__plottedX
-        Y = self.__plottedY
+        F = self.__plottedX[indexes]
+        Y = self.__plottedY[indexes]
         fmin, fmax = float(np.min(F)), float(np.max(F))
         ymin, ymax = float(np.min(Y)), float(np.max(Y))
         frange     = fmax-fmin
@@ -295,13 +287,23 @@ class FeaturesFrame(wx.Frame):
         # reset plotted data
         self.__plottedX = None
         self.__plottedY = None
+        self.__category    = None
+        self.__categoryIDX = None
+        self.__categoryLUT = None
         # clear axes
         self.__mainAxes.cla()
         self.__mainAxes.set_title("scatter plot of: %s "%self.__features.columns[self.__index])
         self.__mainAxes.set_xlabel("feature data range")
         self.__mainAxes.set_ylabel("Y")
         # create plotted data
-        self.__plottedX = np.array( self.__features.ix[:,self.__index] )
+        f = self.__features.ix[:,self.__index]
+        if f.dtype == object:
+            self.__category    = sorted( set(f) )
+            self.__categoryIDX = range( len(self.__category) )
+            self.__categoryLUT = dict( zip(self.__category,self.__categoryIDX) )
+            f = np.array( [self.__categoryLUT[i] for i in f] )
+        self.__plottedX = np.array( f, dtype=float )
+
         keepIndexes     = ~np.isnan(self.__plottedX)
         self.__plottedX = self.__plottedX[keepIndexes]
         self.__plottedY = self.__Y[keepIndexes]
@@ -311,6 +313,11 @@ class FeaturesFrame(wx.Frame):
         self.__mainAxes.plot(self.__plottedX, self.__plottedY, 'o', #self.__Y, 'o',
                              color=fcolor, markeredgecolor=fmarkeredgecolor,
                              markersize=fmarkersize, markeredgewidth=fmarkeredgewidth, zorder=1)
+        # set ticks
+        if self.__category is not None:
+            self.__mainAxes.set_xticks(self.__categoryIDX)
+            self.__mainAxes.set_xticklabels(self.__category, rotation='vertical' )
+
         # add horizontal and vertical lines
         x1, x2 = self.__vlinePoints.get(self.__index, [fmin+frange/3., fmax-frange/3.])
         self.__vlinePoints[self.__index] = [x1,x2]
